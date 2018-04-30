@@ -1,4 +1,5 @@
 import React from 'react';
+import { connect } from 'react-redux'
 import Aux from '../../hoc/Auxi';
 import Burger from '../../components/Burger/Burger';
 import BuildControls from '../../components/Burger/BuildControls/BuildControls';
@@ -7,58 +8,26 @@ import OrderSummary from '../../components/Burger/OrderSummary';
 import axios from '../../axios-orders';
 import Spinner from '../../components/UI/Spinner/Spinner';
 import withErrorHandler from '../../hoc/withErrorHandler';
+import actions from '../../actions/burger/types';
 
-const price = {
-  salad: 0.5,
-  bacon: 1,
-  cheese: 0.75,
-  meat: 2
-}
+const { addIngredient, fetchData } = actions;
 
 class BurgerBuilder extends React.Component {
   constructor (props) {
     super(props);
 
     this.state = {
-      ingredients: {},
-      subTotal: 0,
-      totalPrice: 4,
-      isPurchasable: false,
       purchasing: false,
       loading: false,
     }
   }
 
   componentDidMount () {
-    axios.get('https://react-burger-cbf1b.firebaseio.com/ingredients.json')
-    .then(res => {
-      this.setState({
-        ingredients: res.data
-      })
-    })
-  }
-
-  addIngredientHandler = (type, int) => {
-    if (this.state.ingredients[type] <= 0 && int < 0) { return; }
-
-    const updatedIngredients = {
-      ...this.state.ingredients
-    }
-    updatedIngredients[type] = this.state.ingredients[type] + int;
-
-    const updateSubtotal = this.state.subTotal + price[type] * int;
-    const updatePurchaseState = updateSubtotal > 0;
-
-    this.setState({
-      ingredients: updatedIngredients,
-      subTotal: updateSubtotal,
-      totalPrice: this.state.totalPrice + price[type] * int,
-      isPurchasable: updatePurchaseState
-    })
+    this.props.fetchData();
   }
 
   disableBtn = (type) => {
-    return this.state.ingredients[type] <= 0;
+    // return this.props.ingredients[type] <= 0;
   }
 
   purchaseHandler = () => {
@@ -70,64 +39,69 @@ class BurgerBuilder extends React.Component {
   }
 
   purchaseContinueHandler = () => {
-    this.setState({ loading: true })
-
-    axios.post('/orders.json', {
-      ingredients: this.state.ingredients,
-      price: this.state.totalPrice,
-      customer: {
-        name: 'Mike McD',
-        address: {
-          street: '123 street',
-          zipcode: '12345',
-          state: 'NY'
-        }
-      }
-    })
-    .then(res => {
-      console.log(res)
-      this.setState({ loading: false, purchasing: false })
-    })
-    .catch(err => {
-      console.log(err)
-      this.setState({ loading: false, purchasing: false })
-    })
+    this.props.history.push('/checkout')
   }
 
   orderSummary () {
     if (this.state.loading) {
       return <Spinner />
-    } else {
+    } else if (this.props.ingredients) {
       return (
         <OrderSummary 
-          ingredients={this.state.ingredients} 
+          ingredients={this.props.ingredients} 
           cancel={this.cancelModal} 
           continue={this.purchaseContinueHandler}
-          price={this.state.totalPrice}
+          price={this.props.totalPrice}
         />
       )
     }
   }
 
   render () {
-    const { ingredients, purchasing, isPurchasable, totalPrice } = this.state;
-    
-    return (
-      <Aux>
+    const { purchasing } = this.state;
+    const { ingredients, totalPrice, isPurchasable } = this.props;
+    let burger;
+    if (ingredients) {
+      burger = (
+        <Aux>
         <Modal show={purchasing} cancel={this.cancelModal}>
           {this.orderSummary()}
         </Modal>
         <Burger ingredients={ingredients} />
         <BuildControls 
-          click={this.addIngredientHandler}
+          click={this.props.addIngredient}
           disabled={this.disableBtn}
           price={totalPrice}
           disableOrderNow={isPurchasable}
           ordered={this.purchaseHandler}
         />
       </Aux>
+      )
+    }
+
+    return (
+      <div>
+        {burger}
+      </div>
     )
   }
 }
 
-export default withErrorHandler(BurgerBuilder, axios);
+function mapStateToProps (state) {
+  const { 
+    ingredients, 
+    totalPrice, 
+    isPurchasable,
+    error
+  } = state.Burger;
+
+  return {
+    ingredients,
+    totalPrice,
+    isPurchasable,
+    error
+  }
+}
+
+
+export default connect(mapStateToProps, { addIngredient, fetchData })(withErrorHandler(BurgerBuilder, axios))
